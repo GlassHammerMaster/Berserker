@@ -10,7 +10,6 @@
 int buttonPin1 = 15; // up
 int buttonPin2 = 18; // down
 int buttonPin3 = 12; // select
-int buttonPin4 = 35;
 
 // Menu variables
 int selectedOption = 0;
@@ -132,7 +131,6 @@ void setup() {
   pinMode(buttonPin1, INPUT_PULLUP);
   pinMode(buttonPin2, INPUT_PULLUP);
   pinMode(buttonPin3, INPUT_PULLUP);
-  pinMode(buttonPin4, INPUT_PULLUP);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));

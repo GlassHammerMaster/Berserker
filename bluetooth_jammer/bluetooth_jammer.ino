@@ -1,0 +1,152 @@
+#include "BLEDevice.h"
+#include "BLEServer.h"
+#include "BLEUtils.h"
+#include "BLEScan.h"
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// OLED display dimensions
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// Set scan time to 0 seconds for continuous scanning
+int scanTime = 0;
+bool confirm = 0;
+int buttonPin1 = 15; // up
+int buttonPin2 = 18; // down
+int buttonPin3 = 12; // select
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+      // When a device is found, we'll try to connect to it
+      BLEClient* pClient = BLEDevice::createClient();
+      pClient->connect(&advertisedDevice);
+      delay(100); // Brief connection
+      
+      // Immediately disconnect to jam the connection
+      pClient->disconnect();
+    }
+};
+int selectedOption = 0;
+int scrollOffset = 0;          // NEW: first visible option
+int menuStartX = 0;
+int menuStartY = 10;
+int menuLineHeight = 10;
+
+const char* options[] = {
+  "Confirm",
+  "Deny"
+};
+
+const int optionCount = sizeof(options) / sizeof(options[0]);
+
+// How many lines fit on screen
+const int visibleLines = (SCREEN_HEIGHT - menuStartY) / menuLineHeight;
+void setup() {
+  Serial.begin(115200);
+  pinMode(buttonPin1, INPUT_PULLUP);
+  pinMode(buttonPin2, INPUT_PULLUP);
+  pinMode(buttonPin3, INPUT_PULLUP);
+   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;);
+  }
+  // Initialize BLE
+  BLEDevice::init("");
+  
+  // Create scanner
+  BLEScan* pBLEScan = BLEDevice::getScan();
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+  pBLEScan->setActiveScan(true); // Active scan uses more power but gets results faster
+  pBLEScan->setInterval(100);
+  pBLEScan->setWindow(99); // Less or equal to setInterval value
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.setTextColor(SSD1306_WHITE);
+  display.println("WARNING");
+  display.println("THIS IS A POTENTIALLY");
+  display.println("ILLEGAL ACTION");
+  display.display();
+  delay(2000);
+}
+
+void loop() {
+   // UP button
+  if (digitalRead(buttonPin1) == LOW) {
+    selectedOption--;
+    if (selectedOption < 0) selectedOption = optionCount - 1;
+
+    // Scroll up if needed
+    if (selectedOption < scrollOffset) {
+      scrollOffset = selectedOption;
+    }
+
+    drawMenu();
+    delay(150);
+  }
+
+  // DOWN button
+  if (digitalRead(buttonPin2) == LOW) {
+    selectedOption++;
+    if (selectedOption >= optionCount) selectedOption = 0;
+
+    // Scroll down if needed
+    if (selectedOption >= scrollOffset + visibleLines) {
+      scrollOffset = selectedOption - visibleLines + 1;
+    }
+
+    drawMenu();
+    delay(150);
+  }
+
+  // SELECT button
+  if (digitalRead(buttonPin3) == LOW) {
+    Serial.print("Selected: ");
+    Serial.println(options[selectedOption]);
+    if (selectedOption == 0) {  // "Confirm"
+      confirm = true;
+    } else {
+      confirm = false;
+}
+
+    delay(200);
+  }
+  if (confirm){
+    display.clearDisplay();
+    display.setCursor(0, 10);
+    display.setTextColor(SSD1306_WHITE);
+    display.println("Confirmed!");
+    display.display();
+    delay(1000);
+    display.clearDisplay();
+    display.println("Jamming Bluetooth now");
+    display.display();
+    delay(2000);
+    BLEDevice::getScan()->start(scanTime, false);
+    delay(50); // Small delay between scans
+  }
+}
+void drawMenu() {
+  display.clearDisplay();
+
+  // Draw only visible options
+  for (int i = 0; i < visibleLines; i++) {
+    int optionIndex = scrollOffset + i;
+    if (optionIndex >= optionCount) break;
+
+    int y = menuStartY + i * menuLineHeight;
+
+    if (optionIndex == selectedOption) {
+      display.setTextColor(SSD1306_BLACK, SSD1306_WHITE);
+    } else {
+      display.setTextColor(SSD1306_WHITE);
+    }
+
+    display.setCursor(menuStartX, y);
+    display.println(options[optionIndex]);
+  }
+  display.display();
+}
